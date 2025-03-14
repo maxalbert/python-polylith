@@ -61,5 +61,6 @@ addopts = "-sv"
 dev = [
     "ipdb>=0.13.13",
     "ipython>=8.12.3",
+    "jupyterlab>=4.3.6",
     "polylith-cli>=1.26.0",
 ]
