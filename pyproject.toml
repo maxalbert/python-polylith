@@ -1,0 +1,27 @@
+[project]
+name = "python-polylith"
+version = "0.0.2"
+description = "A Python Polylith repo adding tooling support for the Polylith Architecture"
+authors = [
+    {name = "David Vujic"},
+]
+homepage = "https://github.com/davidvujic/python-polylith"
+repository = "https://github.com/davidvujic/python-polylith"
+readme = "README.md"
+requires-python = ">=3.8.1"
+dependencies = []
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build]
+dev-mode-dirs = ["components", "bases", "development", "."]
+
+[tool.pytest.ini_options]
+addopts = "-sv"
+
+[dependency-groups]
+dev = [
+    "polylith-cli>=1.26.0",
+]
