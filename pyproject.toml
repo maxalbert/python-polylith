@@ -21,6 +21,42 @@ dev-mode-dirs = ["components", "bases", "development", "."]
 [tool.pytest.ini_options]
 addopts = "-sv"
 
+
+[tool.polylith.bricks]
+"bases/polylith/hatch_hooks" = "polylith/hatch_hooks"
+"bases/polylith/pdm_workspace_hooks" = "polylith/pdm_workspace_hooks"
+"bases/polylith/pdm_project_hooks" = "polylith/pdm_project_hooks"
+"bases/polylith/poetry_plugin" = "polylith/poetry_plugin"
+"bases/polylith/cli" = "polylith/cli"
+"components/polylith/commands" = "polylith/commands"
+"components/polylith/test" = "polylith/test"
+"components/polylith/libs" = "polylith/libs"
+"components/polylith/reporting" = "polylith/reporting"
+"components/polylith/info" = "polylith/info"
+"components/polylith/sync" = "polylith/sync"
+"components/polylith/pdm" = "polylith/pdm"
+"components/polylith/development" = "polylith/development"
+"components/polylith/poetry" = "polylith/poetry"
+"components/polylith/yaml" = "polylith/yaml"
+"components/polylith/interface" = "polylith/interface"
+"components/polylith/toml" = "polylith/toml"
+"components/polylith/repo" = "polylith/repo"
+"components/polylith/imports" = "polylith/imports"
+"components/polylith/readme" = "polylith/readme"
+"components/polylith/dirs" = "polylith/dirs"
+"components/polylith/parsing" = "polylith/parsing"
+"components/polylith/check" = "polylith/check"
+"components/polylith/alias" = "polylith/alias"
+"components/polylith/hatch" = "polylith/hatch"
+"components/polylith/diff" = "polylith/diff"
+"components/polylith/files" = "polylith/files"
+"components/polylith/bricks" = "polylith/bricks"
+"components/polylith/project" = "polylith/project"
+"components/polylith/deps" = "polylith/deps"
+"components/polylith/distributions" = "polylith/distributions"
+"components/polylith/configuration" = "polylith/configuration"
+"components/polylith/workspace" = "polylith/workspace"
+"components/polylith/building" = "polylith/building"
 [dependency-groups]
 dev = [
     "polylith-cli>=1.26.0",
