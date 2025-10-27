@@ -1,4 +1,5 @@
 import shutil
+import sys
 from pathlib import Path
 
 import pytest
@@ -44,3 +45,15 @@ def create_test_base(handle_workspace_files):
     }
     create_base(path=handle_workspace_files, options=options)
     yield handle_workspace_files
+
+
+@pytest.fixture
+def enforce_noninteractive(monkeypatch):
+    """Force tests to run in non-interactive mode.
+
+    This fixture mocks sys.stdin.isatty() to return False, ensuring that
+    functions using is_interactive_environment() behave as if running in
+    a non-interactive environment (like CI/automation), preventing
+    interactive prompts during tests.
+    """
+    monkeypatch.setattr("sys.stdin.isatty", lambda: False)
