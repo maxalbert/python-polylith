@@ -7,7 +7,7 @@ keep_file_name = ".keep"
 
 def create_dir(path: Path, dir_name: str, keep=False) -> Path:
     d = path / dir_name
-    d.mkdir(parents=True)
+    d.mkdir(parents=True, exist_ok=True)
 
     if keep:
         create_file(d, keep_file_name)
