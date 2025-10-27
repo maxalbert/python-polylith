@@ -11,6 +11,7 @@ from polylith.workspace.build_backends import BuildBackend
 from polylith.workspace.pyproject_manager import PyProjectTOMLManager
 from polylith.workspace.package_manager_factory import get_package_manager
 from polylith.workspace.package_managers import PackageManagerEnum, PyProjectTOMLCreationError
+from polylith.libs.lock_files import find_lock_files
 
 class WorkspaceStateEnum(Enum):
     """Enum representing possible workspace states."""
@@ -109,19 +110,6 @@ def _prompt_for_package_manager_choice() -> PackageManagerEnum:
             continue
 
 
-def prompt_for_package_manager_configuration() -> Optional[PackageManagerEnum]:
-    """Interactively prompt user for package manager configuration choice."""
-    # First ask if they want to configure now
-    while True:
-        response = input("Would you like to configure a package manager now? (y/n): ").strip().lower()
-        if response in ["y", "yes"]:
-            break
-        elif response in ["n", "no"]:
-            return None
-        # Invalid response, loop will continue
-
-    return _prompt_for_package_manager_choice()
-
 
 def prompt_for_pyproject_creation_and_configuration(project_name: str) -> Optional[PackageManagerEnum]:
     """Prompt user to create pyproject.toml and configure package manager."""
@@ -163,6 +151,72 @@ def display_setup_completion_message() -> None:
     print("2. Re-run with: poly create workspace --package-manager uv")
 
 
+def detect_package_manager(path: Path) -> Optional[PackageManagerEnum]:
+    """Auto-detect package manager from project files and context."""
+    # Priority 1: Check lock files (can distinguish UV from Hatch)
+    lock_files = find_lock_files(path)
+
+    if "uv.lock" in lock_files:
+        return PackageManagerEnum.UV
+    elif "poetry.lock" in lock_files:
+        return PackageManagerEnum.POETRY
+    elif "pdm.lock" in lock_files:
+        return PackageManagerEnum.PDM
+
+    # Priority 2: Check pyproject.toml backend hints (lower priority)
+    pyproject_path = path / "pyproject.toml"
+    if pyproject_path.exists():
+        try:
+            manager = PyProjectTOMLManager.from_file(pyproject_path)
+            backend = manager.detect_build_backend()
+            if backend.get_identifier() == "poetry-core":
+                return PackageManagerEnum.POETRY
+            elif backend.get_identifier() == "pdm-backend":
+                return PackageManagerEnum.PDM
+            # Note: hatchling is used by both UV and Hatch, can't distinguish
+            # We rely on command context detection or lock files for this
+        except Exception:
+            pass
+
+    return None
+
+
+def detect_command_context() -> Optional[PackageManagerEnum]:
+    """Detect package manager from command context (sys.argv)."""
+    if len(sys.argv) >= 2:
+        if sys.argv[0] == "uv" and sys.argv[1] == "run":
+            return PackageManagerEnum.UV
+        elif sys.argv[0] == "poetry" and sys.argv[1] == "run":
+            return PackageManagerEnum.POETRY
+        elif sys.argv[0] == "pdm" and sys.argv[1] == "run":
+            return PackageManagerEnum.PDM
+        elif sys.argv[0] == "hatch" and sys.argv[1] == "run":
+            return PackageManagerEnum.HATCH
+
+    return None
+
+
+def prompt_for_package_manager_configuration_with_detection(path: Path) -> Optional[PackageManagerEnum]:
+    """Prompt with auto-detection and better context."""
+    # Try command context first (highest priority)
+    detected = detect_command_context()
+    if not detected:
+        detected = detect_package_manager(path)
+
+    if detected:
+        print(f"Polylith workspace requires package manager configuration in pyproject.toml.")
+        print(f"Detected: {detected.value.upper()} package manager")
+
+        while True:
+            response = input(f"Configure pyproject.toml for Polylith with {detected.value.upper()}? (Y/n): ").strip().lower()
+            if response in ["y", "yes", ""]:
+                return detected
+            elif response in ["n", "no"]:
+                return _prompt_for_package_manager_choice()
+    else:
+        return prompt_for_pyproject_creation_and_configuration(path.name)
+
+
 def create_workspace(path: Path, namespace: str, theme: str, package_manager: Optional[str] = None) -> None:
     create_dir(path, repo.bases_dir, keep=True)
     create_dir(path, repo.components_dir, keep=True)
@@ -190,8 +244,8 @@ def create_workspace(path: Path, namespace: str, theme: str, package_manager: Op
         if is_interactive_environment():
             # Interactive environment - prompt user
             if pyproject_exists:
-                # Existing pyproject.toml - prompt and configure if user chooses
-                chosen_pm = prompt_for_package_manager_configuration()
+                # Existing pyproject.toml - use auto-detection prompting
+                chosen_pm = prompt_for_package_manager_configuration_with_detection(path)
                 if chosen_pm:
                     pm = get_package_manager(chosen_pm)
                     pm.merge_backend_into_pyproject(path)
