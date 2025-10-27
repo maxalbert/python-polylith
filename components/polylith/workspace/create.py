@@ -10,7 +10,7 @@ from polylith.dirs import create_dir
 from polylith.workspace.build_backends import BuildBackend
 from polylith.workspace.pyproject_manager import PyProjectTOMLManager
 from polylith.workspace.package_manager_factory import get_package_manager
-from polylith.workspace.package_managers import PackageManagerEnum
+from polylith.workspace.package_managers import PackageManagerEnum, PyProjectTOMLCreationError
 
 class WorkspaceStateEnum(Enum):
     """Enum representing possible workspace states."""
@@ -92,18 +92,8 @@ def is_interactive_environment() -> bool:
     return sys.stdin.isatty()
 
 
-def prompt_for_package_manager_configuration() -> Optional[PackageManagerEnum]:
-    """Interactively prompt user for package manager configuration choice."""
-    # First ask if they want to configure now
-    while True:
-        response = input("Would you like to configure a package manager now? (y/n): ").strip().lower()
-        if response in ["y", "yes"]:
-            break
-        elif response in ["n", "no"]:
-            return None
-        # Invalid response, loop will continue
-
-    # Ask for package manager choice
+def _prompt_for_package_manager_choice() -> PackageManagerEnum:
+    """Prompt user to choose a package manager."""
     while True:
         print("Available package managers:")
         for pm in PackageManagerEnum:
@@ -117,6 +107,52 @@ def prompt_for_package_manager_configuration() -> Optional[PackageManagerEnum]:
         except ValueError:
             # Invalid choice, loop will continue
             continue
+
+
+def prompt_for_package_manager_configuration() -> Optional[PackageManagerEnum]:
+    """Interactively prompt user for package manager configuration choice."""
+    # First ask if they want to configure now
+    while True:
+        response = input("Would you like to configure a package manager now? (y/n): ").strip().lower()
+        if response in ["y", "yes"]:
+            break
+        elif response in ["n", "no"]:
+            return None
+        # Invalid response, loop will continue
+
+    return _prompt_for_package_manager_choice()
+
+
+def prompt_for_pyproject_creation_and_configuration(project_name: str) -> Optional[PackageManagerEnum]:
+    """Prompt user to create pyproject.toml and configure package manager."""
+    print("No pyproject.toml found.")
+    print("")
+    print("Would you like to create pyproject.toml and configure it for Polylith?")
+    print("")
+    print("pyproject.toml will be created using your package manager's native command when possible, otherwise from a basic template.")
+    print("")
+    print("Package Manager    Native Init Command")
+    print("-----------------  -----------------------------------------------")
+
+    # Show available options with their commands
+    for pm_enum in PackageManagerEnum:
+        pm = get_package_manager(pm_enum)
+        description = pm.get_init_command_description(project_name)
+        print(f"{pm_enum.value:<17}  {description}")
+
+    print("")
+    print("Polylith configuration adds build system settings and dev-mode-dirs for local development.")
+    print("")
+
+    while True:
+        response = input("Proceed? (y/n): ").strip().lower()
+        if response in ["y", "yes"]:
+            break
+        elif response in ["n", "no"]:
+            return None
+        # Invalid response, loop will continue
+
+    return _prompt_for_package_manager_choice()
 
 
 def display_setup_completion_message() -> None:
@@ -163,17 +199,16 @@ def create_workspace(path: Path, namespace: str, theme: str, package_manager: Op
                     # If user declines (chosen_pm is None), do nothing
                     pass
             else:
-                # No pyproject.toml - prompt and show completion message if user declines
-                chosen_pm = prompt_for_package_manager_configuration()
+                # No pyproject.toml - prompt for creation and configuration
+                chosen_pm = prompt_for_pyproject_creation_and_configuration(path.name)
                 if chosen_pm:
-                    # User chose a package manager but no pyproject.toml exists
-                    # This would cause an error in merge_backend_config_into_pyproject
-                    # But according to the tests, we should still call it and let it error
                     try:
                         pm = get_package_manager(chosen_pm)
+                        pm.create_pyproject_toml(path, path.name)
                         pm.merge_backend_into_pyproject(path)
-                    except ValueError:
-                        # Expected error for missing pyproject.toml - show completion message
+                    except (PyProjectTOMLCreationError, ValueError) as e:
+                        # Creation or configuration failed - show completion message
+                        print(f"Error: {e}")
                         display_setup_completion_message()
                 else:
                     # User declined - show completion message

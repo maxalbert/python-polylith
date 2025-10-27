@@ -3,6 +3,8 @@
 from typing import Protocol
 from pathlib import Path
 from enum import Enum
+import subprocess
+import tomlkit
 
 from polylith.workspace.build_backends import (
     BuildBackend,
@@ -11,6 +13,11 @@ from polylith.workspace.build_backends import (
     PdmBackend,
 )
 from polylith.workspace.pyproject_manager import PyProjectTOMLManager
+
+
+class PyProjectTOMLCreationError(Exception):
+    """Exception raised when pyproject.toml creation fails."""
+    pass
 
 
 class PackageManagerEnum(Enum):
@@ -57,6 +64,18 @@ class PackageManager(Protocol):
         """Generate helpful error for conflicting backends."""
         ...
 
+    def get_init_command_args(self, project_name: str) -> list[str] | None:
+        """Return command args for creating pyproject.toml, or None if not supported."""
+        ...
+
+    def create_pyproject_toml(self, path: Path, project_name: str) -> None:
+        """Create pyproject.toml using package manager's native tooling or template fallback."""
+        ...
+
+    def get_init_command_description(self, project_name: str) -> str:
+        """Return description of how pyproject.toml would be created."""
+        ...
+
 
 class PackageManagerMixin:
     """Mixin providing default implementations for PackageManager protocol methods."""
@@ -89,6 +108,53 @@ class PackageManagerMixin:
         my_backend = self.get_build_backend()
         return f"Conflicting backend configuration in {path / 'pyproject.toml'}: existing {existing.get_identifier()}, but {self.get_display_name()} requires {my_backend.get_identifier()}. Manual configuration required."
 
+    def create_pyproject_toml(self, path: Path, project_name: str) -> None:
+        """Create pyproject.toml using package manager's native tooling or template fallback."""
+        command_args = self.get_init_command_args(project_name)
+        if command_args is None:
+            self._create_pyproject_toml_template(path, project_name)
+        else:
+            self._run_native_init_command(command_args, path)
+
+    def get_init_command_description(self, project_name: str) -> str:
+        """Return description of how pyproject.toml would be created."""
+        command_args = self.get_init_command_args(project_name)
+        if command_args is None:
+            return "basic template (no minimal init available)"
+        return " ".join(command_args)
+
+    def _run_native_init_command(self, command_args: list[str], path: Path) -> None:
+        """Run native package manager init command."""
+        try:
+            result = subprocess.run(
+                command_args,
+                cwd=path,
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            if result.returncode != 0:
+                raise PyProjectTOMLCreationError(f"Command failed: {' '.join(command_args)}\n{result.stderr}")
+        except subprocess.TimeoutExpired as e:
+            raise PyProjectTOMLCreationError(f"Command timed out: {' '.join(command_args)}") from e
+        except FileNotFoundError as e:
+            raise PyProjectTOMLCreationError(f"Command not found: {command_args[0]}") from e
+        except subprocess.SubprocessError as e:
+            raise PyProjectTOMLCreationError(f"Command failed: {' '.join(command_args)}") from e
+
+    def _create_pyproject_toml_template(self, path: Path, project_name: str) -> None:
+        """Create basic pyproject.toml template (without backend config)."""
+        basic_content = {
+            "project": {
+                "name": project_name,
+                "version": "0.1.0",
+            }
+        }
+
+        pyproject_path = path / "pyproject.toml"
+        with pyproject_path.open("w", encoding="utf-8") as f:
+            f.write(tomlkit.dumps(basic_content))
+
 
 # Concrete PackageManager Implementations
 
@@ -108,6 +174,10 @@ class UvPackageManager(PackageManagerMixin):
     def get_display_name(self) -> str:
         return "UV"
 
+    def get_init_command_args(self, project_name: str) -> list[str] | None:
+        """Return UV init command args."""
+        return ["uv", "init", "--bare", "--name", project_name]
+
 
 class HatchPackageManager(PackageManagerMixin):
     """Hatch package manager implementation."""
@@ -124,6 +194,10 @@ class HatchPackageManager(PackageManagerMixin):
 
     def get_display_name(self) -> str:
         return "Hatch"
+
+    def get_init_command_args(self, project_name: str) -> list[str] | None:
+        """Return None since Hatch doesn't support minimal init."""
+        return None
 
 
 class PoetryPackageManager(PackageManagerMixin):
@@ -142,6 +216,10 @@ class PoetryPackageManager(PackageManagerMixin):
     def get_display_name(self) -> str:
         return "Poetry"
 
+    def get_init_command_args(self, project_name: str) -> list[str] | None:
+        """Return Poetry init command args."""
+        return ["poetry", "init", "--name", project_name, "--version", "0.1.0", "--no-interaction"]
+
 
 class PdmPackageManager(PackageManagerMixin):
     """PDM package manager implementation."""
@@ -158,3 +236,7 @@ class PdmPackageManager(PackageManagerMixin):
 
     def get_display_name(self) -> str:
         return "PDM"
+
+    def get_init_command_args(self, project_name: str) -> list[str] | None:
+        """Return PDM init command args."""
+        return ["pdm", "init", "--name", project_name, "--version", "0.1.0", "--no-interaction"]

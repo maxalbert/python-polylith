@@ -8,6 +8,7 @@ from polylith.workspace.create import (
     create_workspace,
     is_interactive_environment,
     prompt_for_package_manager_configuration,
+    prompt_for_pyproject_creation_and_configuration,
     display_setup_completion_message,
     PackageManagerEnum,
 )
@@ -43,6 +44,9 @@ def mock_interactive_functions(monkeypatch):
 
     mocks['prompt'] = Mock()
     monkeypatch.setattr('polylith.workspace.create.prompt_for_package_manager_configuration', mocks['prompt'])
+
+    mocks['prompt_pyproject'] = Mock()
+    monkeypatch.setattr('polylith.workspace.create.prompt_for_pyproject_creation_and_configuration', mocks['prompt_pyproject'])
 
     mocks['display'] = Mock()
     monkeypatch.setattr('polylith.workspace.create.display_setup_completion_message', mocks['display'])
@@ -159,7 +163,7 @@ def test_create_workspace_interactive_no_pyproject_user_declines(mock_interactiv
     """Test workspace creation when user declines to configure package manager."""
     # Setup mocks
     mock_interactive_functions['is_interactive'].return_value = True
-    mock_interactive_functions['prompt'].return_value = None  # User declines
+    mock_interactive_functions['prompt_pyproject'].return_value = None  # User declines
 
     with tempfile.TemporaryDirectory() as temp_dir:
         workspace_path = Path(temp_dir)
@@ -169,7 +173,7 @@ def test_create_workspace_interactive_no_pyproject_user_declines(mock_interactiv
 
         # Verify behavior: should prompt user and show completion message
         mock_interactive_functions['is_interactive'].assert_called_once()
-        mock_interactive_functions['prompt'].assert_called_once()
+        mock_interactive_functions['prompt_pyproject'].assert_called_once()
         mock_interactive_functions['display'].assert_called_once()
 
         # Verify no pyproject.toml was created
@@ -215,8 +219,30 @@ def test_create_workspace_with_explicit_package_manager_skips_prompting(mock_int
         # Verify behavior: should skip all interactive logic
         mock_interactive_functions['is_interactive'].assert_not_called()
         mock_interactive_functions['prompt'].assert_not_called()
+        mock_interactive_functions['prompt_pyproject'].assert_not_called()
         mock_interactive_functions['display'].assert_not_called()
 
         # Verify backend was configured
         content = (workspace_path / "pyproject.toml").read_text()
         assert "hatchling" in content
+
+
+def test_prompt_for_pyproject_creation_and_configuration_yes(mock_user_input):
+    """Test prompting for pyproject creation when user says yes."""
+    # Mock inputs: yes to create, then uv
+    mock_user_input.side_effect = ["y", "uv"]
+
+    result = prompt_for_pyproject_creation_and_configuration("test-project")
+
+    assert result == PackageManagerEnum.UV
+    assert mock_user_input.call_count == 2
+
+
+def test_prompt_for_pyproject_creation_and_configuration_no(mock_user_input):
+    """Test prompting for pyproject creation when user says no."""
+    mock_user_input.return_value = "n"
+
+    result = prompt_for_pyproject_creation_and_configuration("test-project")
+
+    assert result is None
+    assert mock_user_input.call_count == 1

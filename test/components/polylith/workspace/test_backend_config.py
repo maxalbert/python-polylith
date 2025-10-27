@@ -360,3 +360,49 @@ def test_package_manager_generate_conflicting_backend_error(package_managers):
     # Check both errors end with the expected resolution message
     assert uv_error.endswith("Manual configuration required.")
     assert hatch_error.endswith("Manual configuration required.")
+
+
+def test_package_manager_get_init_command_args(package_managers):
+    """Test package managers return correct init command args."""
+    uv_args = package_managers['uv'].get_init_command_args("test-project")
+    hatch_args = package_managers['hatch'].get_init_command_args("test-project")
+    poetry_args = package_managers['poetry'].get_init_command_args("test-project")
+    pdm_args = package_managers['pdm'].get_init_command_args("test-project")
+
+    assert uv_args == ["uv", "init", "--bare", "--name", "test-project"]
+    assert hatch_args is None
+    assert poetry_args == ["poetry", "init", "--name", "test-project", "--version", "0.1.0", "--no-interaction"]
+    assert pdm_args == ["pdm", "init", "--name", "test-project", "--version", "0.1.0", "--no-interaction"]
+
+
+def test_package_manager_get_init_command_description(package_managers):
+    """Test package managers return correct init command descriptions."""
+    uv_desc = package_managers['uv'].get_init_command_description("test-project")
+    hatch_desc = package_managers['hatch'].get_init_command_description("test-project")
+    poetry_desc = package_managers['poetry'].get_init_command_description("test-project")
+    pdm_desc = package_managers['pdm'].get_init_command_description("test-project")
+
+    assert uv_desc == "uv init --bare --name test-project"
+    assert hatch_desc == "basic template (no minimal init available)"
+    assert poetry_desc == "poetry init --name test-project --version 0.1.0 --no-interaction"
+    assert pdm_desc == "pdm init --name test-project --version 0.1.0 --no-interaction"
+
+
+def test_package_manager_create_pyproject_template_fallback(package_managers):
+    """Test creating pyproject.toml using template fallback (via hatch)."""
+    import tempfile
+    import textwrap
+    from pathlib import Path
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_path = Path(temp_dir)
+        package_managers['hatch'].create_pyproject_toml(temp_path, "test-project")
+
+        expected_content = textwrap.dedent("""
+        [project]
+        name = "test-project"
+        version = "0.1.0"
+        """).strip()
+
+        actual_content = (temp_path / "pyproject.toml").read_text().strip()
+        assert actual_content == expected_content
