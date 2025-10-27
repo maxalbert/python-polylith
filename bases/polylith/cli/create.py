@@ -3,7 +3,7 @@ from pathlib import Path
 from polylith import project
 from polylith.bricks import base, component
 from polylith.commands.create import create
-from polylith.workspace.create import create_workspace
+from polylith.workspace.create import create_workspace, PackageManagerEnum
 from typer import Exit, Option, Typer
 from typing_extensions import Annotated
 
@@ -59,8 +59,13 @@ def project_command(
 def workspace_command(
     name: Annotated[str, Option(help="Name of the workspace.")],
     theme: Annotated[str, Option(help="Workspace theme.")] = "tdd",
+    package_manager: Annotated[str, Option(help=f"Package manager to configure ({PackageManagerEnum.supported_values_string()}).")] = None,
 ):
     """Creates a Polylith workspace in the current directory."""
     path = Path.cwd()
 
-    create_workspace(path, name, theme)
+    try:
+        create_workspace(path, name, theme, package_manager)
+    except ValueError as e:
+        print(f"Error: {e}")
+        raise Exit(code=1)
