@@ -77,3 +77,6 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.pytest.ini_options]
 addopts = "-sv"
+markers = [
+    "documentation: tests that document current behavior and serve as specifications for future automation",
+]
